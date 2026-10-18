@@ -19,7 +19,7 @@ class _RestStopScreenState extends State<RestStopScreen> {
   RestStopLocation? _location;
   List<NearbyStop> _places = [];
   StopCategory _category = StopCategory.all;
-  int _radius = 5;
+  static const int _radius = 5;
   int _generation = 0;
   bool _busy = true;
   bool _locating = true;
@@ -214,106 +214,15 @@ class _RestStopScreenState extends State<RestStopScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEAF0FF),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.near_me_rounded,
-                        color: AppTheme.blue,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _location == null
-                              ? 'Find your next break'
-                              : 'Around your current location',
-                          style: const TextStyle(
-                            color: AppTheme.blue,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'A good journey\nincludes a pause.',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Find a nearby place to park, take a break or get something to eat.',
-                    style: TextStyle(
-                      color: AppTheme.muted,
-                      height: 1.5,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Search distance',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<int>(
-                            value: _radius,
-                            borderRadius: BorderRadius.circular(16),
-                            items: [3, 5, 10]
-                                .map(
-                                  (radius) => DropdownMenuItem(
-                                    value: radius,
-                                    child: Text('$radius km'),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _busy
-                                ? null
-                                : (radius) {
-                                    if (radius == null || radius == _radius) {
-                                      return;
-                                    }
-                                    setState(() {
-                                      _radius = radius;
-                                      _places = [];
-                                    });
-                                    _load(refreshLocation: _location == null);
-                                  },
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            FilledButton.icon(
+              onPressed: _searchMaps,
+              icon: const Icon(Icons.map_rounded),
+              label: const Text('Find nearby in Maps'),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
+            const Text('Choose a category, then browse nearby places or open Maps.',
+              style: TextStyle(color: AppTheme.muted, height: 1.4)),
+            const SizedBox(height: 20),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -360,7 +269,7 @@ class _RestStopScreenState extends State<RestStopScreen> {
               _messageCard(
                 Icons.travel_explore_rounded,
                 'No matching places listed',
-                'Try another category, increase the search distance, or look in Maps for more options.',
+                'Try another category or open Maps for more options.',
               )
             else ...[
               for (var i = 0; i < visible.length && i < 24; i++)

@@ -55,4 +55,5 @@ def status_for(token):
         "microsleep_active": state.get("microsleep_active") is True,
         "alarm_event_id": str(event.get("id", "")) if fresh else "",
         "calibrating": state.get("calibrating") is True,
-        "driver_detected": state.get("driver_detected") is True}
+        "driver_detected": state.get("driver_detected") is True,
+        "visibility_warning": state.get("visibility_warning") is True}

@@ -18,9 +18,28 @@ public final class MainActivity extends FlutterActivity {
     private boolean permissionBackground;
     private MediaPlayer testPlayer;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private MethodChannel notifications;
 
     @Override public void configureFlutterEngine(FlutterEngine engine) {
         super.configureFlutterEngine(engine);
+        AlertNotifications.initialize(this);
+        notifications = new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), "drivealert/notifications");
+        notifications.setMethodCallHandler((call, result) -> {
+            try {
+                switch (call.method) {
+                    case "initialize": AlertNotifications.initialize(this); result.success(null); break;
+                    case "takePendingTap":
+                        boolean pending = getIntent().getBooleanExtra(AlertNotifications.OPEN_HISTORY, false);
+                        getIntent().removeExtra(AlertNotifications.OPEN_HISTORY);
+                        result.success(pending); break;
+                    case "show":
+                        String id = call.argument("id"), title = call.argument("title"), body = call.argument("body");
+                        result.success(AlertNotifications.show(this, id == null ? "alert" : id,
+                            title == null ? "DriveAlert" : title, body == null ? "A new warning was recorded." : body)); break;
+                    default: result.notImplemented();
+                }
+            } catch (RuntimeException error) { result.error("notification", "Enable DriveAlert notifications in Android settings.", null); }
+        });
         new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), "drivealert/phone_alarm").setMethodCallHandler((call, result) -> {
             try {
                 switch (call.method) {
@@ -65,11 +84,12 @@ public final class MainActivity extends FlutterActivity {
                         if (testPlayer != null) testPlayer.release();
                         testPlayer = new MediaPlayer();
                         testPlayer.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
-                        try (android.content.res.AssetFileDescriptor file = getResources().openRawResourceFd(R.raw.alert_sound_1)) {
+                        try (android.content.res.AssetFileDescriptor file = getResources().openRawResourceFd(R.raw.wake_alert)) {
                             testPlayer.setDataSource(file.getFileDescriptor(), file.getStartOffset(), file.getLength());
                         }
                         final MediaPlayer current = testPlayer;
                         testPlayer.setOnCompletionListener(player -> { player.release(); if (testPlayer == player) testPlayer = null; });
+                        testPlayer.setLooping(true);
                         testPlayer.prepare(); testPlayer.start();
                         handler.postDelayed(() -> { if (testPlayer == current) { testPlayer.release(); testPlayer = null; } }, 5000);
                         result.success(null);
@@ -78,6 +98,15 @@ public final class MainActivity extends FlutterActivity {
                 }
             } catch (Exception error) { result.error("phone_alarm", "Phone alarm could not start. Check notification permission and alarm volume.", null); }
         });
+    }
+
+    @Override public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent.getBooleanExtra(AlertNotifications.OPEN_HISTORY, false) && notifications != null) {
+            intent.removeExtra(AlertNotifications.OPEN_HISTORY);
+            notifications.invokeMethod("openHistory", null);
+        }
     }
 
     private void startAlarm(String run, String token, String endpoint, MethodChannel.Result result) {

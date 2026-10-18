@@ -42,6 +42,9 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
   bool _eyeClosed = false;
   bool _drowsy = false;
   bool _calibrating = false;
+  bool _visibilityWarning = false;
+  DateTime? _faceMissingSince;
+  DateTime? _lastFrameAt;
 
   // ============================================================
   // DETECTION DATA
@@ -74,8 +77,8 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
       _checkDevice();
     });
 
-    // Load camera frames approximately 5 times per second.
-    _frameTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+    // Keep preview traffic bounded; only one frame request can run at a time.
+    _frameTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (_monitoring || _calibrating) {
         _loadCameraFrame();
       }
@@ -92,6 +95,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
     WidgetsBinding.instance.removeObserver(this);
     _statusTimer?.cancel();
     _frameTimer?.cancel();
+    _clearFrame();
 
     super.dispose();
   }
@@ -99,6 +103,10 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    if (!_foreground) {
+      _controlEpoch++;
+      _clearFrame();
+    }
     if (_foreground) unawaited(_checkDevice());
   }
 
@@ -129,10 +137,23 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
 
           _monitoring = data['monitoring'] == true;
           if (!_monitoring) {
-            _cameraFrame = null;
+            _clearFrame();
           }
 
           _driverDetected = data['driver_detected'] == true;
+          if (_monitoring && !_driverDetected) {
+            _faceMissingSince ??= DateTime.now();
+          } else {
+            _faceMissingSince = null;
+          }
+          _visibilityWarning = _monitoring &&
+              (data['visibility_warning'] == true ||
+                  (_faceMissingSince != null &&
+                      DateTime.now().difference(_faceMissingSince!).inSeconds >= 3));
+          if (_lastFrameAt != null &&
+              DateTime.now().difference(_lastFrameAt!).inSeconds >= 3) {
+            _clearFrame();
+          }
 
           _eyeClosed = data['eye_closed'] == true;
 
@@ -148,6 +169,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
 
           _elapsedSeconds = _toInt(data['elapsed_seconds']);
         });
+        data['visibility_warning'] = _visibilityWarning;
         try {
           await PhoneAlarmService.watch(Map<String, dynamic>.from(data));
           if (mounted && !PhoneAlarmService.supported && _monitoring) {
@@ -190,12 +212,14 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
 
     setState(() {
       _deviceConnected = false;
-      _monitoring = false;
+      // Losing a connection does not prove that the Pi stopped monitoring.
       _driverDetected = false;
       _eyeClosed = false;
       _drowsy = false;
       _calibrating = false;
-      _cameraFrame = null;
+      _visibilityWarning = false;
+      _faceMissingSince = null;
+      _clearFrame();
     });
   }
 
@@ -241,7 +265,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
           setState(() {
             _monitoring = false;
             _calibrating = false;
-            _cameraFrame = null;
+            _clearFrame();
           });
         }
         _showMessage(
@@ -265,7 +289,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
   // ============================================================
 
   Future<void> _loadCameraFrame() async {
-    if (!_foreground || _frameBusy || _controlBusy) return;
+    if (!_foreground || _frameBusy || _controlBusy || !_monitoring || !_deviceConnected) return;
     _frameBusy = true;
     final epoch = _controlEpoch;
     try {
@@ -281,15 +305,25 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
         }
 
         setState(() {
+          _clearFrame();
           _cameraFrame = response.bodyBytes;
+          _lastFrameAt = DateTime.now();
         });
+      } else if (mounted && epoch == _controlEpoch) {
+        setState(_clearFrame);
       }
     } catch (e) {
-      // Ignore frame errors.
-      // Status polling continues normally.
+      if (mounted && epoch == _controlEpoch) setState(_clearFrame);
     } finally {
       _frameBusy = false;
     }
+  }
+
+  void _clearFrame() {
+    final old = _cameraFrame;
+    _cameraFrame = null;
+    _lastFrameAt = null;
+    if (old != null) unawaited(MemoryImage(old).evict());
   }
 
   // ============================================================
@@ -356,6 +390,8 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
       return 'Monitoring Stopped';
     }
 
+    if (_visibilityWarning) return 'Face not clearly visible';
+
     if (_calibrating) {
       return 'Calibrating...';
     }
@@ -387,6 +423,8 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
     if (!_monitoring) {
       return Icons.pause_circle_rounded;
     }
+
+    if (_visibilityWarning) return Icons.visibility_off_rounded;
 
     if (_calibrating) {
       return Icons.tune_rounded;
@@ -437,6 +475,20 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
                       children: [
                         _buildConnectionCard(),
                         const SizedBox(height: 16),
+                        if (_visibilityWarning) ...[
+                          const Semantics(
+                            liveRegion: true,
+                            child: Card(
+                              color: Color(0xFFFFF4DB),
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text('Face not clearly visible. Check lighting and camera position.',
+                                  style: TextStyle(color: Color(0xFF765000), fontWeight: FontWeight.w600)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         _buildCameraCard(),
                         const SizedBox(height: 16),
                         _buildStatusCard(),
@@ -671,6 +723,8 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
                     _cameraFrame!,
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
+                    errorBuilder: (_, _, _) => const Center(child: Text(
+                      'Camera preview reconnecting...', style: TextStyle(color: Colors.white70))),
                   )
                 : Center(
                     child: Column(
@@ -686,7 +740,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
                         const SizedBox(height: 12),
                         Text(
                           _monitoring
-                              ? 'Waiting for camera...'
+                              ? 'Camera preview reconnecting...'
                               : 'Camera Preview',
                           style: const TextStyle(
                             color: Colors.white70,
@@ -714,13 +768,13 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: _monitoring ? Colors.red : Colors.grey,
+                      color: _cameraFrame != null ? Colors.red : Colors.grey,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    _monitoring ? 'LIVE' : 'OFF',
+                    _cameraFrame != null ? 'LIVE' : (_monitoring ? 'CONNECTING' : 'OFF'),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
@@ -844,7 +898,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
 
     if (!_deviceConnected) {
       statusColor = const Color(0xFFE53935);
-    } else if (_calibrating) {
+    } else if (_visibilityWarning || _calibrating) {
       statusColor = const Color(0xFFFF9F1C);
     } else if (_drowsy) {
       statusColor = const Color(0xFFE53935);
@@ -1132,7 +1186,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
-        onPressed: _controlBusy || !_deviceConnected
+        onPressed: _controlBusy || (!_deviceConnected && !_monitoring)
             ? null
             : (_monitoring ? _stopMonitoring : _startMonitoring),
         style: ElevatedButton.styleFrom(

@@ -51,6 +51,6 @@ class MonitorFrameView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
         monitoring.registered_device(request.user)
-        response = monitoring.device_request("GET", "/api/frame")
+        response = monitoring.device_request("GET", "/api/frame", timeout=2)
         return HttpResponse(response.content, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
 

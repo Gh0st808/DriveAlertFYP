@@ -23,19 +23,42 @@ class Detection:
         self.closed_since = self.drowsy_since = None
         self.emitted = {}
         self.blinks = self.drowsiness = self.microsleeps = self.long_closures = 0
+        self.visibility_lost_since = None
+        self.last_sample = None
 
     def update(self, ear, now, valid=True):
         events = []
-        valid = valid and math.isfinite(ear)
+        valid = valid and math.isfinite(ear) and 0 < ear <= 0.8
+        # An inference/camera gap must not count as continuous eye closure.
+        if self.last_sample is not None and now - self.last_sample > 1.0:
+            self.closed_since = self.drowsy_since = None
+            self.emitted = {}
+            if not self.baseline:
+                self.samples.clear()
+        self.last_sample = now
+        if valid:
+            self.visibility_lost_since = None
+        elif self.visibility_lost_since is None:
+            self.visibility_lost_since = now
+        visibility_warning = (self.visibility_lost_since is not None
+                              and now - self.visibility_lost_since >= 3.0)
         state = {"calibrating": self.baseline == 0, "baseline_ear": self.baseline,
                  "calibration_progress": min(99, len(self.samples) * 2),
                  "eye_closed": False, "drowsy": False, "microsleep_active": False, "driver_detected": valid,
-                 "average_ear": ear if valid else 0.0, "status": "Driver Not Detected"}
+                 "average_ear": ear if valid else 0.0, "status": "Driver Not Detected",
+                 "visibility_warning": visibility_warning,
+                 "visibility_message": "Face not clearly visible. Check lighting and camera position." if visibility_warning else "",
+                 "blink_count": self.blinks, "drowsy_events": self.drowsiness,
+                 "drowsy_count": self.drowsiness, "microsleep_count": self.microsleeps,
+                 "long_closure_count": self.long_closures}
         if not valid:
             self.closed_since = self.drowsy_since = None
             self.emitted = {}
             if self.baseline == 0:
                 self.samples.clear()  # Require a continuous view during calibration.
+                state["calibration_progress"] = 0
+            if visibility_warning:
+                state["status"] = "Poor Visibility"
             return state, events
         if self.baseline == 0:
             state["status"] = "Calibrating"
@@ -47,6 +70,8 @@ class Detection:
                         self.baseline = max(0.20, min(statistics.median(self.samples), 0.45))
                     else:
                         self.samples = self.samples[-25:]
+            else:
+                self.samples.clear()
             state.update(calibrating=self.baseline == 0, baseline_ear=self.baseline,
                          calibration_progress=100 if self.baseline else min(99, len(self.samples) * 2))
             return state, events

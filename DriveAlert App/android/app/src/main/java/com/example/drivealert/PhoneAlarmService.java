@@ -35,6 +35,7 @@ public final class PhoneAlarmService extends Service {
     private volatile int generation = 0;
     private String lastNotice = "";
     private String audioIssue = "";
+    private long faceMissingSince = 0;
     private final Runnable watchdog = new Runnable() {
         @Override public void run() {
             if (!alive) return;
@@ -85,7 +86,7 @@ public final class PhoneAlarmService extends Service {
         generation++;
         stopAudio();
         run = nextRun; token = nextToken; endpoint = nextEndpoint;
-        policy = new AlarmPolicy(); lastSuccess = 0; activeClosure = false; soundEnabled = false;
+        policy = new AlarmPolicy(); lastSuccess = 0; activeClosure = false; soundEnabled = false; faceMissingSince = 0;
         prefs.edit().putBoolean("active", true).putString("run", run).putString("token", token)
             .putString("endpoint", endpoint).remove("error").apply();
         alive = true;
@@ -173,11 +174,16 @@ public final class PhoneAlarmService extends Service {
             stopSelf(); return;
         }
         lastSuccess = SystemClock.elapsedRealtime();
+        if (data.optBoolean("driver_detected")) faceMissingSince = 0;
+        else if (faceMissingSince == 0) faceMissingSince = lastSuccess;
+        boolean poorVisibility = data.optBoolean("visibility_warning") ||
+            (faceMissingSince > 0 && lastSuccess - faceMissingSince >= 3000);
         soundEnabled = data.optBoolean("sound_enabled");
         activeClosure = data.optBoolean("microsleep_active") && data.optBoolean("driver_detected") && !data.optBoolean("calibrating");
-        boolean alarm = policy.update(soundEnabled, activeClosure, data.optString("alarm_event_id"), lastSuccess);
+        boolean alarm = policy.update(soundEnabled && !poorVisibility, activeClosure, data.optString("alarm_event_id"), lastSuccess);
         if (alarm) playAudio(); else stopAudio();
-        if (!soundEnabled) notice("Monitoring active. Phone sound is disabled in Settings.");
+        if (poorVisibility) notice("Face not clearly visible. Check lighting and camera position.");
+        else if (!soundEnabled) notice("Monitoring active. Phone sound is disabled in Settings.");
         else if (audio.getStreamVolume(AudioManager.STREAM_ALARM) == 0) notice("Alarm volume is zero. Raise the phone's alarm volume.");
         else if (alarm && !audioIssue.isEmpty()) notice(audioIssue);
         else if (player != null) notice("Microsleep warning. Stop somewhere safe and rest.");
@@ -209,7 +215,7 @@ public final class PhoneAlarmService extends Service {
             MediaPlayer next = new MediaPlayer();
             player = next;
             next.setAudioAttributes(attributes);
-            try (android.content.res.AssetFileDescriptor file = getResources().openRawResourceFd(R.raw.alert_sound_1)) {
+            try (android.content.res.AssetFileDescriptor file = getResources().openRawResourceFd(R.raw.wake_alert)) {
                 next.setDataSource(file.getFileDescriptor(), file.getStartOffset(), file.getLength());
             }
             next.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
