@@ -37,6 +37,42 @@ class DetectionTests(unittest.TestCase):
         _, events = d.update(0.1, 12)
         self.assertEqual(events, [])
 
+    def test_visibility_warning_after_three_seconds_and_clears_on_recovery(self):
+        d = self.calibrated()
+        state, events = d.update(0, 10, valid=False)
+        self.assertFalse(state["visibility_warning"])
+        state, events = d.update(0, 13.1, valid=False)
+        self.assertTrue(state["visibility_warning"])
+        self.assertFalse(state["driver_detected"])
+        self.assertFalse(state["microsleep_active"])
+        self.assertEqual(events, [])
+        state, _ = d.update(0.3, 13.2)
+        self.assertFalse(state["visibility_warning"])
+
+    def test_invalid_calibration_reading_discards_prior_samples(self):
+        d = Detection()
+        for i in range(30):
+            d.update(0.3, i * 0.1)
+        d.update(0.1, 3.0)
+        self.assertEqual(d.samples, [])
+        for i in range(25):
+            d.update(0.3, 3.1 + i * 0.1)
+        self.assertEqual(d.baseline, 0)
+
+    def test_detection_gap_cannot_be_counted_as_eye_closure(self):
+        d = self.calibrated()
+        d.update(0.1, 10)
+        state, events = d.update(0.1, 15)
+        self.assertFalse(state["microsleep_active"])
+        self.assertEqual(events, [])
+
+    def test_counts_are_preserved_during_face_loss(self):
+        d = self.calibrated()
+        d.update(0.1, 10)
+        d.update(0.1, 10.9)
+        state, _ = d.update(0, 11, valid=False)
+        self.assertEqual(state["microsleep_count"], 1)
+
     def test_blink_does_not_count_as_microsleep(self):
         d = self.calibrated()
         d.update(0.1, 10)
@@ -114,6 +150,27 @@ class DeviceApiTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/monitor/start", json={}, headers=headers).status_code, 400)
         self.device.state["run_id"] = str(uuid.uuid4())
         self.assertEqual(self.client.post("/api/monitor/stop", json={"run_id":str(uuid.uuid4())}, headers=headers).status_code, 409)
+
+    def test_stale_frames_are_not_served_as_live(self):
+        import time
+        self.device.jpeg_frame = b"old-jpeg"
+        self.device.last_frame_tick = time.monotonic() - 10
+        response = self.client.get("/api/frame", headers={"X-Device-Key": "test-device-key"})
+        self.assertEqual(response.status_code, 503)
+        self.device.jpeg_frame = None
+        self.device.last_frame_tick = None
+
+
+class CameraTimeoutTests(unittest.TestCase):
+    def test_picamera_capture_uses_a_bounded_job(self):
+        from unittest.mock import Mock
+        from hardware import Camera
+        camera = Camera.__new__(Camera)
+        camera.picamera = Mock()
+        camera.picamera.capture_array.return_value.get_result.return_value = "frame"
+        self.assertEqual(camera.read(), "frame")
+        camera.picamera.capture_array.assert_called_once_with(wait=False)
+        camera.picamera.capture_array.return_value.get_result.assert_called_once_with(timeout=2.0)
 
 
 class EventSenderTests(unittest.TestCase):

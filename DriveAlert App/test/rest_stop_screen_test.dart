@@ -59,6 +59,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Nearby recommendations'), findsOneWidget);
+      expect(find.text('Find nearby in Maps'), findsOneWidget);
+      expect(find.text('Search distance'), findsNothing);
+      expect(find.byType(DropdownButton<int>), findsNothing);
       expect(find.text('Example Cafe'), findsOneWidget);
       expect(find.textContaining('http://'), findsNothing);
       expect(tester.takeException(), isNull);

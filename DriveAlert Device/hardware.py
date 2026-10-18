@@ -31,7 +31,9 @@ class Camera:
 
     def read(self):
         if self.picamera is not None:
-            return self.picamera.capture_array()
+            # A stalled capture must not trap the monitoring thread indefinitely.
+            job = self.picamera.capture_array(wait=False)
+            return job.get_result(timeout=2.0)
         success, frame = self.camera.read()
         if not success:
             raise RuntimeError("Camera stopped returning frames.")

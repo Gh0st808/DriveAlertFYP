@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:cross_file/cross_file.dart';
 import 'user_message.dart';
@@ -42,26 +43,32 @@ class ApiService {
     String path, {
     Object? body,
     bool authenticated = true,
+    Duration requestTimeout = timeout,
   }) async {
     final requestAccount = refreshToken;
     Future<http.Response> send() async {
-      final req = http.Request(method, Uri.parse('$baseUrl$path'));
+      final abort = Completer<void>();
+      final req = http.AbortableRequest(method, Uri.parse('$baseUrl$path'), abortTrigger: abort.future);
       req.headers.addAll(
         authenticated ? headers : {'Content-Type': 'application/json'},
       );
       if (body != null) req.body = jsonEncode(body);
-      return await http.Response.fromStream(
-        await client.send(req),
-      ).timeout(timeout);
+      try {
+        return await (() async => http.Response.fromStream(await client.send(req)))()
+            .timeout(requestTimeout);
+      } finally {
+        // Future.timeout alone does not cancel a socket or a response stream.
+        if (!abort.isCompleted) abort.complete();
+      }
     }
 
-    var response = await send().timeout(timeout);
+    var response = await send().timeout(requestTimeout);
     if (authenticated &&
         response.statusCode == 401 &&
         refreshToken == requestAccount &&
         await refreshAccessToken() &&
         refreshToken == requestAccount) {
-      response = await send().timeout(timeout);
+      response = await send().timeout(requestTimeout);
     }
     return response;
   }
@@ -168,6 +175,7 @@ class ApiService {
     String? emergencyContactPhone,
     XFile? profilePicture,
   }) async {
+    final requestAccount = refreshToken;
     Future<http.Response> send() async {
       final req = http.MultipartRequest(
         'PATCH',
@@ -200,7 +208,8 @@ class ApiService {
     }
 
     var response = await send().timeout(timeout);
-    if (response.statusCode == 401 && await refreshAccessToken()) {
+    if (response.statusCode == 401 && refreshToken == requestAccount &&
+        await refreshAccessToken() && refreshToken == requestAccount) {
       response = await send().timeout(timeout);
     }
     return response;
@@ -279,7 +288,7 @@ class ApiService {
   static Future<http.Response> monitorStatus() =>
       request('GET', '/monitor/api/status');
   static Future<http.Response> monitorFrame() =>
-      request('GET', '/monitor/api/frame');
+      request('GET', '/monitor/api/frame', requestTimeout: const Duration(seconds: 3));
   static Future<http.Response> startMonitoring() =>
       request('POST', '/monitor/api/monitor/start', body: {});
   static Future<http.Response> stopMonitoring() =>

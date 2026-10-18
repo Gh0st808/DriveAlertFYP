@@ -1,5 +1,7 @@
 # Repository import
 
+The original snapshot below has since been repaired on 18 October 2026. See REPAIR_NOTES_2026-10-18.md for the new changes and their verification limits.
+
 This repository contains the saved `DriveAlert-Repaired.zip` package, last saved on 16 October 2026, imported on 18 October 2026.
 
 It includes the Django backend, Flutter app, Raspberry Pi device code, setup scripts and documentation. Later changes described in conversation or present only on the laptop have not been verified against this snapshot.

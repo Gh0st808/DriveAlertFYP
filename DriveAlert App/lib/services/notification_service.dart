@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../firebase_options.dart';
@@ -25,14 +26,20 @@ class NotificationService {
   static bool _pendingHistory = false;
   static String? _token;
   static String? lastError;
+  static const _native = MethodChannel('drivealert/notifications');
 
   static Future<void> initialize() async {
     if (!supported || available) return;
     try {
       await Firebase.initializeApp(options: driveAlertFirebaseOptions);
+      await _native.invokeMethod<void>('initialize');
+      _native.setMethodCallHandler((call) async {
+        if (call.method == 'openHistory') _openHistory();
+      });
       FirebaseMessaging.onBackgroundMessage(driveAlertBackgroundMessage);
       FirebaseMessaging.onMessage.listen((message) {
         if (!_enabled || ApiService.accessToken == null) return;
+        unawaited(_showTrayAlert(message));
         messengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text(
@@ -57,10 +64,26 @@ class NotificationService {
       });
       final initial = await FirebaseMessaging.instance.getInitialMessage();
       _pendingHistory = initial != null;
+      _pendingHistory = (await _native.invokeMethod<bool>('takePendingTap') ?? false) || _pendingHistory;
       available = true;
     } catch (_) {
       lastError =
           'Notifications are unavailable. Check that Google Play services is available and try again.';
+    }
+  }
+
+  static Future<void> _showTrayAlert(RemoteMessage message) async {
+    try {
+      final shown = await _native.invokeMethod<bool>('show', {
+        'id': message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString(),
+        'title': message.notification?.title ?? 'DriveAlert',
+        'body': message.notification?.body ?? 'A new DriveAlert event was recorded.',
+      });
+      if (shown != true) lastError = 'Allow DriveAlert alerts in Android notification settings.';
+    } on PlatformException {
+      lastError = 'Allow DriveAlert alerts in Android notification settings.';
+    } on MissingPluginException {
+      lastError = 'Rebuild DriveAlert to enable phone notification alerts.';
     }
   }
 

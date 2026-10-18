@@ -42,7 +42,7 @@ def send_notification(registration, event, dry_run=False, test=False):
         data={"event_id": str(event.pk), "session_id": str(event.session_id), "route": "/history"},
         android=messaging.AndroidConfig(
             priority="high", ttl=timedelta(minutes=5),
-            notification=messaging.AndroidNotification(tag="drivealert-fatigue", sound="default")),
+            notification=messaging.AndroidNotification(tag="drivealert-fatigue", sound="default", channel_id="drivealert_alerts_v2")),
     )
     return messaging.send(message, dry_run=dry_run, app=app)
 

@@ -21,6 +21,7 @@ journal = None
 jpeg_frame = None
 last_sample_tick = None
 last_alarm_tick = None
+last_frame_tick = None
 state = {"monitoring": False, "camera": False, "driver_detected": False,
          "calibrating": False, "status": "Stopped", "run_id": None,
          "blink_count": 0, "drowsy_events": 0, "drowsy_count": 0,
@@ -46,13 +47,14 @@ def authenticate():
 
 
 def monitoring_loop(run_id):
-    global jpeg_frame, last_sample_tick, last_alarm_tick
+    global jpeg_frame, last_sample_tick, last_alarm_tick, last_frame_tick
     camera = landmarks = audio = None
     started = time.monotonic()
     fps_started = started
     frames = 0
     last_heartbeat = 0.0
     last_audio = 0.0
+    last_preview = 0.0
     detector = Detection(state["sensitivity_level"])
     try:
         import cv2
@@ -79,7 +81,7 @@ def monitoring_loop(run_id):
             now = time.monotonic()
             detector.sensitivity = state["sensitivity_level"]
             result, events = detector.update(ear, now, valid)
-            if face and not valid:
+            if face and not valid and not result["visibility_warning"]:
                 result["status"] = "Move Closer"
             for event_type, duration, value in events:
                 event = get_journal().event(run_id, event_type, duration, value)
@@ -90,7 +92,7 @@ def monitoring_loop(run_id):
                         last_alarm_tick = now
             # Repeat an audible warning during a sustained closure without duplicating events.
             if audio and result["microsleep_active"] and state["alert_sound_enabled"] and now - last_audio >= 5:
-                audio.play("alert_sound_1.mp3")
+                audio.play("wake_alert.wav")
                 last_audio = now
             frames += 1
             with state_lock:
@@ -105,12 +107,14 @@ def monitoring_loop(run_id):
             if now - last_heartbeat >= 1:
                 get_journal().heartbeat(run_id)
                 last_heartbeat = now
-            cv2.putText(frame, f"EAR: {ear:.3f}  {result['status']}", (15, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
-            success, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            if success:
-                with state_lock:
-                    jpeg_frame = encoded.tobytes()
+            # Preview encoding has its own lower rate; detection still processes each sample.
+            if now - last_preview >= 0.33:
+                success, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                if success:
+                    with state_lock:
+                        jpeg_frame = encoded.tobytes()
+                        last_frame_tick = now
+                last_preview = now
             if os.getenv("SHOW_PREVIEW", "false").lower() == "true":
                 cv2.imshow("DriveAlert", frame)
                 if cv2.waitKey(1) & 255 == ord("q"):
@@ -130,10 +134,12 @@ def monitoring_loop(run_id):
         get_journal().end(run_id)
         with state_lock:
             state.update(monitoring=False, camera=False, driver_detected=False,
-                         calibrating=False, eye_closed=False, drowsy=False, microsleep_active=False)
+                         calibrating=False, eye_closed=False, drowsy=False, microsleep_active=False,
+                         visibility_warning=False, visibility_message="")
             if state["status"] != "Device Error":
                 state["status"] = "Stopped"
             jpeg_frame = None
+            last_frame_tick = None
         ready_event.set()
 
 
@@ -145,6 +151,11 @@ def status():
         now = time.monotonic()
         snapshot["sample_age_seconds"] = now - last_sample_tick if last_sample_tick is not None else None
         snapshot["alarm_event_age_seconds"] = now - last_alarm_tick if last_alarm_tick is not None else None
+        if (snapshot["monitoring"] and last_sample_tick is not None
+                and now - last_sample_tick > 5.0):
+            snapshot.update(driver_detected=False, eye_closed=False, drowsy=False,
+                            microsleep_active=False, visibility_warning=False,
+                            status="Camera Unavailable", camera=False)
         return jsonify(snapshot)
 
 
@@ -152,7 +163,8 @@ def status():
 def frame():
     with state_lock:
         data = jpeg_frame
-    if data is None:
+        age = time.monotonic() - last_frame_tick if last_frame_tick is not None else None
+    if data is None or age is None or age > 2.0:
         return jsonify(success=False, message="No current camera frame."), 503
     return Response(data, mimetype="image/jpeg", headers={"Cache-Control": "no-store"})
 
@@ -178,7 +190,7 @@ def update_settings():
 
 @app.post("/api/monitor/start")
 def start():
-    global thread, jpeg_frame, last_sample_tick, last_alarm_tick
+    global thread, jpeg_frame, last_sample_tick, last_alarm_tick, last_frame_tick
     data = request.get_json(silent=True) or {}
     try:
         run_id = str(uuid.UUID(data.get("run_id", "")))
@@ -202,10 +214,12 @@ def start():
                          drowsy_count=0, microsleep_count=0, long_closure_count=0,
                          elapsed_seconds=0, session_duration=0, baseline_ear=0, fps=0,
                           average_ear=0, last_event=None, last_alarm_event=None, microsleep_active=False,
+                         visibility_warning=False, visibility_message="",
                          sensitivity_level=data.get("sensitivity", "Medium"),
                          alert_sound_enabled=data.get("alert_sound_enabled", True) is True)
             jpeg_frame = None
             last_sample_tick = last_alarm_tick = None
+            last_frame_tick = None
         thread = threading.Thread(target=monitoring_loop, args=(run_id,), daemon=True)
         thread.start()
         if not ready_event.wait(8):

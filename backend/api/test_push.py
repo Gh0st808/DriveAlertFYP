@@ -42,6 +42,14 @@ class PushTests(TestCase):
         push.enqueue(self.event)
         self.assertEqual(PushDelivery.objects.count(), 1)
 
+    @patch("firebase_admin.messaging.send", return_value="test-message")
+    @patch("firebase_admin.get_app", return_value=object())
+    def test_push_selects_the_android_alert_channel(self, app, sender):
+        push.send_notification(self.registration, self.event)
+        message = sender.call_args.args[0]
+        self.assertEqual(message.android.notification.channel_id, "drivealert_alerts_v2")
+        self.assertEqual(message.android.priority, "high")
+
     def test_old_events_and_drowsiness_do_not_create_push_jobs(self):
         self.event.timestamp = timezone.now()-timedelta(hours=1)
         push.enqueue(self.event)

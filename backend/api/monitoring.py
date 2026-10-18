@@ -16,12 +16,12 @@ class DeviceUnavailable(APIException):
     default_detail = "Cannot reach the DriveAlert device. Check its power, Wi-Fi and DEVICE_URL."
 
 
-def device_request(method, path, data=None):
+def device_request(method, path, data=None, *, timeout=12):
     try:
         request = Request(settings.DEVICE_URL.rstrip("/") + path,
             data=json.dumps(data).encode() if data is not None else None,
             headers={"X-Device-Key": settings.DEVICE_API_KEY, "Content-Type": "application/json"}, method=method)
-        with urlopen(request, timeout=12) as response:
+        with urlopen(request, timeout=timeout) as response:
             content = response.read()
         class Result:
             def json(self):

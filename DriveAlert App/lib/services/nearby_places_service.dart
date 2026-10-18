@@ -149,6 +149,7 @@ class NearbyPlacesService {
   }
 
   Future<List<NearbyStop>> _fetch(String lat, String lon, int radiusKm) async {
+    final abort = Completer<void>();
     final radius = radiusKm * 1000 + 100;
     final query =
         '[out:json][timeout:12];('
@@ -157,7 +158,7 @@ class NearbyPlacesService {
         ');out body center 250;';
     try {
       final request =
-          http.Request('POST', Uri.https('overpass-api.de', '/api/interpreter'))
+          http.AbortableRequest('POST', Uri.https('overpass-api.de', '/api/interpreter'), abortTrigger: abort.future)
             ..followRedirects = false
             ..headers['Accept'] = 'application/json'
             ..headers['User-Agent'] = 'DriveAlert/1.0 nearby-rest-stops'
@@ -202,6 +203,8 @@ class NearbyPlacesService {
       throw const NearbyPlacesException(
         'Unable to load nearby places. Check your internet connection or search in Maps.',
       );
+    } finally {
+      if (!abort.isCompleted) abort.complete();
     }
   }
 

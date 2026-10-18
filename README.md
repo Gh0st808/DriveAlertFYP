@@ -4,6 +4,8 @@ This package repairs the complete project copied from your existing **DriveAlert
 
 ## Start here
 
+For the **18 October repair**, applying it without replacing private configuration, and checks that still need the laptop/phone/Pi, read **REPAIR_NOTES_2026-10-18.md** first. Earlier validation documents describe earlier revisions.
+
 For the latest visual changes, verified checks and remaining physical-device tests, see **APP_REVIEW.md**. The app UI is updated in this working copy; rebuild/install it with run_app.ps1 to see the changes on the phone.
 
 Use a new extracted folder for this version. Keep your current project and back up your existing MySQL database before applying migrations. This package preserves migrations 0001–0003 and adds 0004; it does not reset accounts or erase tables.
@@ -35,9 +37,9 @@ On a changed Wi-Fi network, update backend/.env:
 
 - DJANGO_ALLOWED_HOSTS: add the backend's current reachable Wi-Fi IP.
 - DEVICE_URL: the Pi address reachable from Django.
-- The app's Server connection button: the backend address ending in /api.
+- Rebuild the app using run_app.ps1 -BackendUrl http://CURRENT_LAPTOP_IP:8000/api.
 
-The Server connection button changes the address for the current app session. Use the run command's API_BASE_URL to set the installed build's default.
+Server addresses are kept out of the driver interface. The run script supplies API_BASE_URL at build time.
 
 ## 2. Start the backend on Windows
 

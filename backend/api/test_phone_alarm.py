@@ -63,6 +63,15 @@ class PhoneAlarmTests(TestCase):
         with self.transport():
             self.assertEqual(self.request().status_code, 503)
 
+    def test_visibility_warning_reaches_phone_without_becoming_a_microsleep(self):
+        self.state.update(visibility_warning=True, driver_detected=False,
+                          microsleep_active=False, last_alarm_event=None)
+        with self.transport():
+            response = self.request()
+        self.assertTrue(response.data["visibility_warning"])
+        self.assertFalse(response.data["microsleep_active"])
+        self.assertEqual(response.data["alarm_event_id"], "")
+
     def test_stopped_session_and_wrong_run_cannot_keep_alarm_alive(self):
         with self.transport():
             self.state["run_id"] = str(uuid.uuid4())
