@@ -1,3 +1,5 @@
+[← Documentation](../README.md)
+
 # Nearby rest-stop recommendations
 
 The Rest Stops page now keeps category filters at the top and shows mapped places beneath them. Categories are All nearby, Rest areas, Fuel, Cafes, Food and Parking. The user can search within 3, 5 or 10 km, refresh the area, filter the loaded results, and open driving directions for an individual place in Maps.

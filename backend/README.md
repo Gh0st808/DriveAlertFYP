@@ -1,21 +1,25 @@
-# DriveAlert Django backend
+# DriveAlert backend
 
-Use the project root configure.py and setup_backend.ps1 instructions before starting.
+Django REST API for accounts, devices, sessions, detection events, reports, notifications and AI assistant requests.
 
-The default database is MySQL. Migrations 0001–0003 are preserved; migration 0004 adds profile preferences, vehicle model, Pi run IDs and idempotent event IDs.
+## Configuration
 
-Tests with an isolated SQLite database:
+Use the root setup guide to create local environment settings. MySQL is the default database. Apply the repository migrations with the configured environment; preserve existing records and migration history.
+
+The app authenticates using JWT. Device communication uses DEVICE_URL, DEVICE_SERIAL_NUMBER and DEVICE_API_KEY.
+
+## Tests
 
 ```powershell
 python manage.py test api --settings=config.test_settings
 python manage.py makemigrations --check --dry-run --settings=config.test_settings
 ```
 
-Install the device requirements as well to run the two optional Flask protocol integration tests. Without Flask those tests are skipped.
+The test settings select an isolated SQLite database. Flask/device dependencies are needed for the protocol integration tests.
 
-The app authenticates with JWT. Django talks to the Pi using DEVICE_URL, DEVICE_SERIAL_NUMBER and DEVICE_API_KEY from .env.
+The default email backend prints password-reset links to the terminal. SMTP settings are required for inbox delivery.
 
-The default email backend prints reset links in the terminal. Set SMTP environment variables for real email delivery.
-
-The root README explains network configurations and safe migration handling.
-
+- [Setup](../docs/SETUP.md)
+- [Cloud configuration](../docs/configuration/CLOUD.md)
+- [ILMU configuration](../docs/configuration/ILMU.md)
+- [Validation](../docs/testing/VALIDATION.md)

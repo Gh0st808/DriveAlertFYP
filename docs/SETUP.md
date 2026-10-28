@@ -1,18 +1,10 @@
-[← Project overview](../README.md)
+# Setup and operation
 
-# DriveAlert setup and operation
+[← Documentation](README.md)
 
-This package repairs the complete project copied from your existing **DriveAlert FYP** folder. The uploaded ZIP was an older Flutter UI-only version. The original folder and your MySQL database were not modified.
+Run commands from the repository root unless a step specifies another directory. Requirements include Python, Flutter, MySQL, a Raspberry Pi camera and a network connecting the phone, backend and device. Back up existing database records before applying migrations and preserve local configuration when updating an installation.
 
-## Start here
-
-For the **18 October repair**, applying it without replacing private configuration, and checks that still need the laptop/phone/Pi, read **[REPAIR_NOTES_2026-10-18.md](../REPAIR_NOTES_2026-10-18.md)** first. Earlier validation documents describe earlier revisions.
-
-For the latest visual changes, verified checks and remaining physical-device tests, see **[APP_REVIEW.md](../APP_REVIEW.md)**. The app UI is updated in this working copy; rebuild/install it with run_app.ps1 to see the changes on the phone.
-
-Use a new extracted folder for this version. Keep your current project and back up your existing MySQL database before applying migrations. This package preserves migrations 0001–0003 and adds 0004; it does not reset accounts or erase tables.
-
-The connection is now **phone → Django backend → Pi**. The phone needs only the backend address. The backend must be able to reach the Pi.
+The connection is **phone → Django backend → Pi**. The phone needs only the backend address. The backend must be able to reach the Pi.
 
 Choose the configuration matching your setup:
 
@@ -25,7 +17,7 @@ If your phone joins the Pi hotspot while Django stays on a disconnected laptop n
 
 ## 1. Configure both services
 
-From the extracted project root:
+From the project root:
 
 ```powershell
 python configure.py
@@ -130,7 +122,7 @@ Password reset now generates a real, expiring, single-use link with a browser re
 
 To send actual email, set EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend and complete the EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_USE_TLS and DEFAULT_FROM_EMAIL settings in backend/.env. The reset link must use an address reachable by its recipient.
 
-Android Firebase push and a backend Gemini chatbot are integrated. See [CLOUD_SETUP.md](../CLOUD_SETUP.md) for credential setup, dependency installation, the notification worker and live phone checks. Firebase public configuration matches drivealert-36c76 / com.example.drivealert. Private credentials and Gemini keys are excluded from this archive. The chatbot needs a Gemini key before live replies work. Phone alarm service is independent of push notifications; report suggestions remain based on recorded counts.
+Firebase notifications and AI assistant interfaces are implemented in the backend. See [cloud configuration](configuration/CLOUD.md) and [ILMU configuration](configuration/ILMU.md) for setup. Configure only the provider selected for the installation. Credentials remain in backend environment settings. The phone alarm service is independent of cloud push.
 
 ## Data flow and recovery
 
@@ -157,7 +149,7 @@ The original sensitivity ratios and detection times are retained:
 | Medium | 0.76 | 0.64 | 0.50 s | 0.80 s |
 | High | 0.80 | 0.70 | 0.35 s | 0.60 s |
 
-Calibration requires 50 valid open-eye samples, with EAR 0.20–0.50 and coefficient of variation ≤0.12. Long closures use 3 seconds. These are project thresholds; this repair does not establish detection accuracy, precision, recall or F1-score. Evaluate them with labelled controlled trials on your device.
+Calibration requires 50 valid open-eye samples, with EAR 0.20–0.50 and coefficient of variation ≤0.12. Long closures use 3 seconds. These are project thresholds; these thresholds do not establish detection accuracy, precision, recall or F1-score. Evaluate them with labelled controlled trials on your device.
 
 ## Backend on the Pi
 
@@ -167,7 +159,7 @@ MySQL remains the default. DB_ENGINE=sqlite is an explicit optional setting for 
 
 ## Validation and limits
 
-See [VALIDATION.md](../VALIDATION.md) for the actual automated results and checks still requiring your hardware. This is a local FYP development setup. Django runserver and HTTP LAN addresses are for local demonstrations; internet deployment still requires production hosting, HTTPS, restricted hosts/origins and production secrets.
+See the [testing guide](testing/VALIDATION.md) for recorded checks and target-device acceptance procedures. This is a local FYP development setup. Django runserver and HTTP LAN addresses are for local demonstrations; internet deployment still requires production hosting, HTTPS, restricted hosts/origins and production secrets.
 
 Primary implementation references:
 
@@ -178,4 +170,4 @@ Primary implementation references:
 
 ## Phone audio and Pi deployment update
 
-The phone, rather than the Pi, is the default audible output. [PHONE_ALARMS.md](../PHONE_ALARMS.md) explains the Android foreground service, permission/volume/battery requirements, local connection dependency and locked-screen checks. [PI_DEPLOYMENT.md](../PI_DEPLOYMENT.md) contains the current Pi deployment steps. Rebuild and install the Android app fully; hot reload cannot install this native change. PI_AUDIO_ENABLED=false is the default.
+The phone, rather than the Pi, is the default audible output. [phone alerts](deployment/PHONE_ALARMS.md) explains the Android foreground service, permission/volume/battery requirements, local connection dependency and locked-screen checks. [Pi deployment](deployment/RASPBERRY_PI.md) contains the current Pi deployment steps. Rebuild and install the Android app fully; hot reload cannot install this native change. PI_AUDIO_ENABLED=false is the default.

@@ -1,21 +1,28 @@
-# DriveAlert Flutter app
+# DriveAlert mobile app
 
-Read the root README for setup of the backend, Pi and paired device key.
+Flutter interface for monitoring, journeys, reports and account settings.
+
+## Run
+
+From this directory:
 
 ```powershell
 flutter pub get
-flutter analyze
-flutter test
 flutter run --dart-define=API_BASE_URL=http://YOUR_BACKEND_IP:8000/api
 ```
 
-The login screen's **Server connection** button can change the backend address for the current app session. The app connects to Django for monitoring status, start/stop and frames; it does not require a separate Pi address.
+The app connects to Django, which coordinates the Pi. Register the device serial in Settings before starting monitoring.
 
-Register the Pi serial matching the backend configuration in Settings before starting monitoring.
+## Check
 
-Journey reports are under Analytics. History displays saved records. GPS rest-stop search opens Maps with the phone's actual location.
+```powershell
+flutter analyze
+flutter test
+```
 
-Firebase push notifications are not configured in this build. Password reset email delivery depends on backend SMTP settings.
+Rebuild and install after native Android changes. Configure Firebase and the selected AI provider on the backend; actual delivery and target-phone audio require device checks.
 
-Use the root VALIDATION.md for automated results and target-device checks.
-
+- [Project setup](../docs/SETUP.md)
+- [Screens and workflows](../docs/features/MOBILE_APP.md)
+- [Android alerts](../docs/deployment/PHONE_ALARMS.md)
+- [Testing](../docs/testing/VALIDATION.md)
