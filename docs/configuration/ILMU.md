@@ -1,3 +1,5 @@
+[← Documentation](../README.md)
+
 # ILMU chatbot setup
 
 Sign in at https://console.ilmu.ai/ and create an API key with available tokens. A chat website account alone is not API access. Check the console for free-plan availability, expiry and supported models before purchasing anything.

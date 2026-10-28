@@ -7,7 +7,7 @@ try {
         $python = Join-Path $PSScriptRoot "backend\venv\Scripts\python.exe"
     }
     if (!(Test-Path -LiteralPath $python)) {
-        throw "Use the existing repaired folder with its backend virtual environment, or set up its Python dependencies first."
+        throw "Set up the backend virtual environment and install its dependencies before running validation."
     }
     Push-Location "backend"
     try {
@@ -29,5 +29,5 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "Android build failed." }
         }
     } finally { Pop-Location }
-    Write-Host "Checks passed. Complete the phone and Pi acceptance checks in REPAIR_NOTES_2026-10-18.md."
+    Write-Host "Checks passed. Complete the phone and Pi acceptance checks in docs/testing/VALIDATION.md."
 } finally { Pop-Location }
