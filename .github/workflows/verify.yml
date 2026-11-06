@@ -1,0 +1,52 @@
+name: Verify DriveAlert
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Django tests and migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install MySQL build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config default-libmysqlclient-dev
+      - name: Install Python dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Test backend using isolated SQLite settings
+        working-directory: backend
+        run: python manage.py test --settings=config.test_settings
+      - name: Check migrations
+        working-directory: backend
+        run: python manage.py makemigrations --check --dry-run --settings=config.test_settings
+
+  flutter:
+    name: Flutter analysis, tests and Android build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.9'
+      - name: Resolve Flutter dependencies
+        working-directory: DriveAlert App
+        run: flutter pub get
+      - name: Analyze Flutter source
+        working-directory: DriveAlert App
+        run: flutter analyze
+      - name: Run Flutter tests
+        working-directory: DriveAlert App
+        run: flutter test
+      - name: Build Android debug APK
+        working-directory: DriveAlert App
+        run: flutter build apk --debug
