@@ -476,7 +476,7 @@ class _LiveMonitorScreenState extends State<LiveMonitorScreen>
                         _buildConnectionCard(),
                         const SizedBox(height: 16),
                         if (_visibilityWarning) ...[
-                          const Semantics(
+                          Semantics(
                             liveRegion: true,
                             child: Card(
                               color: Color(0xFFFFF4DB),
